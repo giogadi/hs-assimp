@@ -4,6 +4,7 @@ module Bindings.Assimp.Material where
 
 import Control.Applicative
 import Control.Monad
+import Data.Maybe
 import Data.Word
 import Foreign.C.String
 import Foreign.C.Types
@@ -106,16 +107,20 @@ data MaterialProperties =
 
 data TextureProperties =
   TextureProperties { type'TextureProperties :: TextureType
-                    , path'TextureProperties :: Maybe String
-                    , mapping'TextureProperties :: Maybe TextureMapping
-                    , uvIndex'TextureProperties :: Maybe Int
-                    , blend'TextureProperties :: Maybe Float
-                    , op'TextureProperties :: Maybe TextureOp
-                    , mapMode'TextureProperties :: Maybe TextureMapMode
-                    , invertColors' :: Maybe Bool
-                    , useAlpha' :: Maybe Bool
+                    , path'TextureProperties :: String
+                    -- These are put in time-out because assimp is dumb
+                    -- , mapping'TextureProperties :: TextureMapping
+                    -- , uvIndex'TextureProperties :: Int
+                    -- , blend'TextureProperties :: Float
+                    -- , op'TextureProperties :: TextureOp
+                    -- , mapModeU'TextureProperties :: TextureMapMode
+                    -- , mapModeV'TextureProperties :: TextureMapMode
+                    -- TODO decide what to do with this shit
+                    -- , invertColors' :: Maybe Bool
+                    -- , useAlpha' :: Maybe Bool
                     } deriving (Show)
 
+-- TODO: consider making textureProperties a map from texture type to properties.
 data Material = Material { materialProperties'Material :: MaterialProperties
                          , textureProperties'Material :: [TextureProperties] }
                          deriving (Show)
@@ -166,6 +171,60 @@ getMaterialColor p key =
         Failure -> return Nothing
         _ -> error $ "error getMaterialColor: " ++ key
 
+-- Put in timeout because assimp doesn't seem to have a way of telling us whether it has given us valid values for stuff.
+-- getMaterialTexture :: Ptr Material -> TextureType -> Int -> IO (Maybe TextureProperties)
+-- getMaterialTexture p texType ix =
+--   alloca $ \pathPtr ->
+--     alloca $ \texMappingPtr ->
+--       alloca $ \uvIxPtr ->
+--         alloca $ \blendPtr ->
+--           alloca $ \opPtr ->
+--             allocaArray 2 $ \mapModePtr ->
+--               alloca $ \flagsPtr -> do
+--                 returnCode <- liftM (toEnum . fromIntegral) $ {#call unsafe GetMaterialTexture #}
+--                   (castPtr p) (fromIntegral $ fromEnum texType) (fromIntegral ix)
+--                   (castPtr pathPtr) (castPtr texMappingPtr) (castPtr uvIxPtr)
+--                   (castPtr blendPtr) (castPtr opPtr) (castPtr mapModePtr) (castPtr flagsPtr)
+--                 case returnCode of
+--                   Success -> do
+--                     AssimpString path <- peek pathPtr
+--                     texMapping <- liftM (toEnum . fromIntegral) (peek texMappingPtr :: IO CUInt)
+--                     uvIx <- fromIntegral <$> (peek uvIxPtr :: IO Word32)
+--                     blend <- realToFrac <$> (peek blendPtr :: IO CFloat)
+--                     op <- liftM (toEnum . fromIntegral) (peek opPtr :: IO Word8)
+--                     [mapModeU, mapModeV] <- fmap (map (toEnum . fromIntegral)) (peekArray 2 mapModePtr :: IO [CUInt])
+--                     flags <- peek flagsPtr :: IO (CUInt)
+--                     return $ Just $ TextureProperties
+--                       texType path texMapping uvIx blend op mapModeU mapModeV
+--                   Failure -> return Nothing
+--                   _ -> error $ "error getMaterialTexture: " ++ show texType ++ " " ++ show ix
+
+getMaterialTexture :: Ptr Material -> TextureType -> Int -> IO (Maybe TextureProperties)
+getMaterialTexture p texType ix =
+  alloca $ \pathPtr -> do
+    returnCode <- liftM (toEnum . fromIntegral) $ {#call unsafe GetMaterialTexture #}
+                    (castPtr p) (fromIntegral $ fromEnum texType) (fromIntegral ix)
+                    (castPtr pathPtr) nullPtr nullPtr
+                    nullPtr nullPtr nullPtr nullPtr
+    case returnCode of
+      Success -> do
+        AssimpString path <- peek pathPtr
+        return $ Just $ TextureProperties texType path
+      Failure -> return Nothing
+      _ -> error $ "error getMaterialTexture: " ++ show texType ++ " " ++ show ix
+
+getMaterialTextureCount :: Ptr Material -> TextureType -> IO (Int)
+getMaterialTextureCount p texType =
+  fromIntegral <$> {#call unsafe GetMaterialTextureCount #} (castPtr p) (fromIntegral $ fromEnum texType)
+
+getMaterialTextures :: Ptr Material -> IO [TextureProperties]
+getMaterialTextures p = do
+  let types = enumFromTo TextureTypeDiffuse TextureTypeUnknown
+  counts <- mapM (getMaterialTextureCount p) types
+  let indicesToCheck = map (\c -> [0 .. c - 1]) counts
+      texturesFromType t ixs = catMaybes <$> mapM (getMaterialTexture p t) ixs
+  concat <$> sequence (zipWith texturesFromType types indicesToCheck)
+
 instance Storable Material where
   sizeOf _ = {#sizeof Material #}
   alignment _ = {#alignof Material #}
@@ -188,6 +247,7 @@ instance Storable Material where
     transparent <- getMaterialColor p "$clr.transparent"
     reflective <- getMaterialColor p "$clr.reflective"
     bgImage <- getMaterialString p "?bg.global"
+    textures <- getMaterialTextures p
     return $ Material
       { materialProperties'Material =
           MaterialProperties name
@@ -208,6 +268,6 @@ instance Storable Material where
                              transparent
                              reflective
                              bgImage
-      , textureProperties'Material = [] -- TODO FINISH THIS IDIOT
+      , textureProperties'Material = textures
       }
   poke p = undefined
