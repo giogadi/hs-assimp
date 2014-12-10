@@ -50,7 +50,9 @@ instance Storable Face where
     return $ Face $ map fromIntegral indices
   poke p = undefined
 
-data VertexWeight = VertexWeight Int Float deriving (Eq, Read, Show)
+data VertexWeight = VertexWeight { _vertexIx :: Int
+                                 , _weight :: Float
+                                 } deriving (Eq, Read, Show)
 
 instance Storable VertexWeight where
   sizeOf _ = {#sizeof VertexWeight #}
@@ -75,6 +77,7 @@ instance Storable Bone where
     weights <- peekArray numWeights (castPtr weightsPtr)
     matrix <- peekByteOff p {#offsetof Bone->mOffsetMatrix #}
     return $ Bone name weights matrix
+  poke _ = undefined
 
 -- TODO SRSLY use a vector for vertices idiot
 data Mesh = Mesh { primitiveTypes'Mesh :: S.Set PrimitiveType

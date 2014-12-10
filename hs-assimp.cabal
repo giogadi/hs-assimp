@@ -58,6 +58,8 @@ library
                        Bindings.Assimp.Mesh
                        Bindings.Assimp.Matrix4x4
                        Bindings.Assimp.Scene
+                       Bindings.Assimp.Quaternion
+                       Bindings.Assimp.Anim
 
   -- include-dirs:
 

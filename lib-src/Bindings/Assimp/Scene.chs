@@ -28,6 +28,7 @@ import Foreign.Storable
 {#import Bindings.Assimp.Material #}
 {#import Bindings.Assimp.Matrix4x4 #}
 {#import Bindings.Assimp.Vector3 #}
+{#import Bindings.Assimp.Anim #}
 
 -- TODO include metadata I guess
 data Node = Node { name'Node :: String
@@ -66,6 +67,7 @@ instance Storable Node where
 data Scene = Scene { rootNode'Scene :: Node
                    , meshes'Scene :: [Mesh]
                    , materials'Scene :: [Material]
+                   , animations'Scene :: [Animation]
                    , textures'Scene :: [Texture]
                    , lights'Scene :: [Light]
                    , cameras'Scene :: [Camera]
@@ -108,7 +110,12 @@ instance Storable Scene where
     cameraPtrs <- peekArray numCameras (castPtr camerasPtr)
     cameras <- mapM peek cameraPtrs
 
-    return $ Scene rootNode meshes materials textures lights cameras
+    numAnimations <- fromIntegral <$> ({#get Scene->mNumAnimations #} p)
+    animationsPtr <- {#get Scene->mAnimations #} p
+    animationPtrs <- peekArray numAnimations $ castPtr animationsPtr
+    animations <- mapM peek animationPtrs
+
+    return $ Scene rootNode meshes materials animations textures lights cameras
 
   poke _ = undefined
 

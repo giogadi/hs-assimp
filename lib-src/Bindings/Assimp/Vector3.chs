@@ -14,7 +14,7 @@ import Foreign.Storable
 data Vector3D = Vector3D { x'Vector3D :: Float
                          , y'Vector3D :: Float
                          , z'Vector3D :: Float
-                         } deriving (Read, Show)
+                         } deriving (Eq, Read, Show)
 
 instance Storable Vector3D where
   sizeOf _ = {#sizeof Vector3D #}
