@@ -22,6 +22,7 @@ import Foreign.Storable
 {#import Bindings.Assimp.Types #}
 {#import Bindings.Assimp.Vector2 #}
 {#import Bindings.Assimp.Vector3 #}
+{#import Bindings.Assimp.Matrix4x4 #}
 
 {#enum PrimitiveType {PrimitiveType_POINT as Point,
                       PrimitiveType_LINE as Line,
@@ -49,11 +50,38 @@ instance Storable Face where
     return $ Face $ map fromIntegral indices
   poke p = undefined
 
+data VertexWeight = VertexWeight Int Float deriving (Eq, Read, Show)
+
+instance Storable VertexWeight where
+  sizeOf _ = {#sizeof VertexWeight #}
+  alignment _ = {#alignof VertexWeight #}
+  peek p = VertexWeight
+    <$> (fromIntegral <$> ({#get VertexWeight->mVertexId #} p))
+    <*> (realToFrac <$> ({#get VertexWeight->mWeight #} p))
+  poke _ = undefined
+
+data Bone = Bone { name'Bone :: String
+                 , vertexWeights :: [VertexWeight]
+                 , offsetMatrix :: Matrix4x4
+                 } deriving (Show)
+
+instance Storable Bone where
+  sizeOf _ = {#sizeof Bone #}
+  alignment _ = {#alignof Bone #}
+  peek p = do
+    AssimpString name <- peekByteOff p {#offsetof Bone->mName #}
+    numWeights <- fromIntegral <$> ({#get Bone->mNumWeights #} p)
+    weightsPtr <- {#get Bone->mWeights #} p
+    weights <- peekArray numWeights (castPtr weightsPtr)
+    matrix <- peekByteOff p {#offsetof Bone->mOffsetMatrix #}
+    return $ Bone name weights matrix
+
 -- TODO SRSLY use a vector for vertices idiot
 data Mesh = Mesh { primitiveTypes'Mesh :: S.Set PrimitiveType
                  , vertices'Mesh :: [Vertex]
                  , faces'Mesh :: [Face]
                  , numUVComponents'Mesh :: [Int]
+                 , bones'Mesh :: [Bone]
                  , materialIndex'Mesh :: Int
                  , name'Mesh :: String
                  } deriving (Show)
@@ -111,6 +139,13 @@ instance Storable Mesh where
     let usedTextureCoordSetPtrs = filter (/= nullPtr) textureCoordSetPtrs
     textureCoordSets <- mapM (peekArray numVertices . castPtr) usedTextureCoordSetPtrs
     print "Mesh 19"
+    let colorSetsTransposed = if null colorSets
+                                then repeat []
+                                else transpose colorSets
+    let textureCoordSetsTransposed = if null textureCoordSets
+                                       then repeat []
+                                       else transpose textureCoordSets
+    let vertices = zipWith6 Vertex positions normals tangents bitangents colorSetsTransposed textureCoordSetsTransposed
     let numUVCompsOffset = {#offsetof Mesh->mNumUVComponents #}
     let numUVCompsOffsets = take {#const AI_MAX_NUMBER_OF_TEXTURECOORDS #} [0, (sizeOf (undefined :: Word32)) ..]
     print "Mesh 20"
@@ -126,12 +161,9 @@ instance Storable Mesh where
     print "Mesh 25"
     (AssimpString name) <- peekByteOff p {#offsetof Mesh->mName #}
     print "Mesh 26"
-    let colorSetsTransposed = if null colorSets
-                                then repeat []
-                                else transpose colorSets
-    let textureCoordSetsTransposed = if null textureCoordSets
-                                       then repeat []
-                                       else transpose textureCoordSets
-    let vertices = zipWith6 Vertex positions normals tangents bitangents colorSetsTransposed textureCoordSetsTransposed
-    return $ Mesh primitiveTypeSet vertices faces numUVComponents materialIndex name
+    numBones <- fromIntegral <$> ({#get Mesh->mNumBones #} p)
+    bonesPtr <- {#get Mesh->mBones #} p
+    bonePtrs <- peekArray numBones (castPtr bonesPtr)
+    bones <- mapM peek bonePtrs
+    return $ Mesh primitiveTypeSet vertices faces numUVComponents bones materialIndex name
   poke p = undefined
