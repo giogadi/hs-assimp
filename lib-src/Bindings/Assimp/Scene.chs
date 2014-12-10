@@ -16,7 +16,6 @@ import Foreign.Ptr
 import Foreign.Storable
 
 #include <assimp/scene.h>
-#include <assimp/cimport.h>
 
 {#context lib = "assimp" prefix = "ai" #}
 
@@ -64,6 +63,7 @@ instance Storable Node where
     return $ Node name transform children (map fromIntegral meshIxs)
   poke _ = undefined
 
+-- TODO: do scene flags
 data Scene = Scene { rootNode'Scene :: Node
                    , meshes'Scene :: [Mesh]
                    , materials'Scene :: [Material]
@@ -118,11 +118,3 @@ instance Storable Scene where
     return $ Scene rootNode meshes materials animations textures lights cameras
 
   poke _ = undefined
-
-importFile :: String -> IO Scene
-importFile filename =
-  withCString filename $ \cstr -> do
-    scenePtr <- {#call unsafe ImportFile #} cstr 0
-    scene <- peek (castPtr scenePtr)
-    {#call unsafe ReleaseImport #} scenePtr
-    return scene

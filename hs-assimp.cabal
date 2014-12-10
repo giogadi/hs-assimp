@@ -60,6 +60,7 @@ library
                        Bindings.Assimp.Scene
                        Bindings.Assimp.Quaternion
                        Bindings.Assimp.Anim
+                       Bindings.Assimp.Import
 
   -- include-dirs:
 
