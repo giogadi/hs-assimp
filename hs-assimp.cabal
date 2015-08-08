@@ -48,6 +48,8 @@ cabal-version:       >=1.10
 
 library
   -- Modules exported by the library.
+  -- !FIXME! These need to be kept in this order otherwise the c2hs tool
+  -- won't touch the ones that are needed by dependency.
   exposed-modules:     Bindings.Assimp.Vector2
                        Bindings.Assimp.Vector3
                        Bindings.Assimp.Types
@@ -55,11 +57,11 @@ library
                        Bindings.Assimp.Camera
                        Bindings.Assimp.Material
                        Bindings.Assimp.Texture
-                       Bindings.Assimp.Mesh
                        Bindings.Assimp.Matrix4x4
-                       Bindings.Assimp.Scene
+                       Bindings.Assimp.Mesh
                        Bindings.Assimp.Quaternion
                        Bindings.Assimp.Anim
+                       Bindings.Assimp.Scene
                        Bindings.Assimp.Import
 
   -- include-dirs:
